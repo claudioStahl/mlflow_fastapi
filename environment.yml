@@ -7,3 +7,6 @@ dependencies:
   - pip:
     - fastapi
     - uvicorn[standard]
+    - scikit-learn==0.23.2
+    - mlflow>=1.0
+    - pandas    
