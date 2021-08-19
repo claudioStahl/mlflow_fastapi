@@ -9,7 +9,7 @@ conda activate mlflow_fastapi
 
 ```sh
 export MLFLOW_TRACKING_URI='http://localhost:5000'
-uvicorn main:app --reload
+uvicorn mlflow_fastapi.main:app --reload
 ```
 
 # Curl
