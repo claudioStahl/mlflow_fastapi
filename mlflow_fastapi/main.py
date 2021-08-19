@@ -176,15 +176,6 @@ def parse_split_oriented_json_input_to_numpy(json_input):
         )
 
 
-def predictions_to_json(raw_predictions, output):
-    predictions = _get_jsonable_obj(raw_predictions, pandas_orient="records")
-    print(predictions)
-    wrapper_attr_name = os.environ.get(PREDICTIONS_WRAPPER_ATTR_NAME_ENV_KEY, None)
-    if wrapper_attr_name:
-        predictions = {wrapper_attr_name: predictions}
-    json.dump(predictions, output, cls=NumpyEncoder)
-
-
 model_uri = "models:/ElasticnetWineModel/Staging"
 local_path = _download_artifact_from_uri(model_uri)
 print(local_path)
