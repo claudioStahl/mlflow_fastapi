@@ -5,6 +5,12 @@ conda env create -f environment.yml
 conda activate mlflow_fastapi
 ```
 
+# Update env
+
+```sh
+conda env update -f environment.yml
+```
+
 # Dev
 
 ```sh
