@@ -11,3 +11,6 @@ dependencies:
     - mlflow>=1.0
     - pandas
     - pytest
+    - keras<2.6.0
+    - scikit-learn
+    - tensorflow!=2.5.*,!=2.6.*
