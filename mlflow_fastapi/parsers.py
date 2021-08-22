@@ -1,25 +1,9 @@
-from typing import Optional
-from fastapi import FastAPI, Response, Request, HTTPException, status
-
-
-from mlflow.models import FlavorBackend
-from mlflow.models.docker_utils import _build_image, DISABLE_ENV_CREATION
-from mlflow.pyfunc import ENV, scoring_server
-
-from mlflow.utils.conda import get_or_create_conda_env, get_conda_bin_executable, get_conda_command
-from mlflow.tracking.artifact_utils import _download_artifact_from_uri
-from mlflow.utils.file_utils import path_to_local_file_uri
-from mlflow.version import VERSION
-
+from fastapi import HTTPException
 
 from collections import OrderedDict
 import json
-import logging
 import numpy as np
-import os
 import pandas as pd
-import sys
-import traceback
 
 # NB: We need to be careful what we import form mlflow here. Scoring server is used from within
 # model's conda environment. The version of mlflow doing the serving (outside) and the version of
@@ -28,28 +12,7 @@ import traceback
 # ALl of the mlfow dependencies below need to be backwards compatible.
 from mlflow.exceptions import MlflowException
 from mlflow.types import Schema
-from mlflow.utils import reraise
-from mlflow.utils.proto_json_utils import (
-    NumpyEncoder,
-    _dataframe_from_json,
-    _get_jsonable_obj,
-    parse_tf_serving_input,
-)
-
-try:
-    from mlflow.pyfunc import load_model, PyFuncModel
-except ImportError:
-    from mlflow.pyfunc import load_pyfunc as load_model
-from mlflow.protos.databricks_pb2 import MALFORMED_REQUEST, BAD_REQUEST
-from mlflow.server.handlers import catch_mlflow_exception
-
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
-
-_SERVER_MODEL_PATH = "__pyfunc_model_path__"
-
+from mlflow.utils.proto_json_utils import _dataframe_from_json, parse_tf_serving_input
 
 def infer_and_parse_json_input(json_input, schema: Schema = None):
     """
