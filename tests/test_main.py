@@ -87,7 +87,31 @@ def model_path(tmpdir):
     return str(os.path.join(tmpdir.strpath, "model"))
 
 
-def test_read_main():
-    response = client.get("/ping")
-    assert response.status_code == 200
-    assert response.json() == "pong"
+# def test_read_main():
+#     response = client.get("/ping")
+#     assert response.status_code == 200
+#     assert response.json() == "pong"
+
+
+def test_scoring_server_successfully_evaluates_correct_dataframes_with_pandas_split_orientation(
+    sklearn_model, model_path
+):
+    print("aqui")
+    print(model_path)
+    mlflow.sklearn.save_model(sk_model=sklearn_model.model, path=model_path)
+
+    pandas_split_content = pd.DataFrame(sklearn_model.inference_data).to_json(orient="split")
+
+    response_default_content_type = pyfunc_serve_and_score_model(
+        model_uri=os.path.abspath(model_path),
+        data=pandas_split_content,
+        content_type=pyfunc_scoring_server.CONTENT_TYPE_JSON,
+    )
+    # assert response_default_content_type.status_code == 200
+
+    # response = pyfunc_serve_and_score_model(
+    #     model_uri=os.path.abspath(model_path),
+    #     data=pandas_split_content,
+    #     content_type=pyfunc_scoring_server.CONTENT_TYPE_JSON_SPLIT_ORIENTED,
+    # )
+    # assert response.status_code == 200

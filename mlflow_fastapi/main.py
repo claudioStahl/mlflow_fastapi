@@ -175,17 +175,14 @@ def parse_split_oriented_json_input_to_numpy(json_input):
             error_code=MALFORMED_REQUEST,
         )
 
-
-model_uri = "models:/ElasticnetWineModel/Staging"
-local_path = _download_artifact_from_uri(model_uri)
-print(local_path)
+model_path = os.getcwd() + "/model"
 
 # NB: Absolute windows paths do not work with mlflow apis, use file uri to ensure
 # platform compatibility.
-local_uri = path_to_local_file_uri(local_path)
-print(local_uri)
+model_uri = path_to_local_file_uri(model_path)
+print(model_uri)
 
-model = load_model(local_uri)
+model = load_model(model_uri)
 input_schema = model.metadata.get_input_schema()
 
 app = FastAPI()
