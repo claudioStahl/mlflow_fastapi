@@ -31,7 +31,7 @@ from tests.helper_functions import pyfunc_serve_and_score_model, random_int, ran
 
 ModelWithData = namedtuple("ModelWithData", ["model", "inference_data"])
 
-client = TestClient(app)
+# client = TestClient(app)
 
 
 @pytest.fixture
@@ -66,6 +66,17 @@ def sklearn_model():
 
 
 @pytest.fixture(scope="session")
+def sklearn_model_resp():
+    return [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1, 
+        2, 2, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 1, 2, 2, 
+        2, 2, 1, 1, 2, 2, 2, 2, 1, 2, 1, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 1, 2, 2, 
+        2, 1
+    ]
+
+
+@pytest.fixture(scope="session")
 def keras_model():
     iris = datasets.load_iris()
     data = pd.DataFrame(
@@ -94,7 +105,7 @@ def model_path(tmpdir):
 
 
 def test_scoring_server_successfully_evaluates_correct_dataframes_with_pandas_split_orientation(
-    sklearn_model, model_path
+    sklearn_model, sklearn_model_resp, model_path
 ):
     print("aqui")
     print(model_path)
@@ -107,11 +118,13 @@ def test_scoring_server_successfully_evaluates_correct_dataframes_with_pandas_sp
         data=pandas_split_content,
         content_type=pyfunc_scoring_server.CONTENT_TYPE_JSON,
     )
-    # assert response_default_content_type.status_code == 200
+    assert response_default_content_type.status_code == 200
+    assert response_default_content_type.json() == sklearn_model_resp
 
-    # response = pyfunc_serve_and_score_model(
-    #     model_uri=os.path.abspath(model_path),
-    #     data=pandas_split_content,
-    #     content_type=pyfunc_scoring_server.CONTENT_TYPE_JSON_SPLIT_ORIENTED,
-    # )
-    # assert response.status_code == 200
+    response = pyfunc_serve_and_score_model(
+        model_uri=os.path.abspath(model_path),
+        data=pandas_split_content,
+        content_type=pyfunc_scoring_server.CONTENT_TYPE_JSON_SPLIT_ORIENTED,
+    )
+    assert response.status_code == 200
+    assert response.json() == sklearn_model_resp

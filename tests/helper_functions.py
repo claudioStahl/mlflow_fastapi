@@ -22,6 +22,8 @@ import mlflow.pyfunc
 # from mlflow.tracking.artifact_utils import _download_artifact_from_uri
 from mlflow.utils.file_utils import read_yaml, write_yaml
 
+# import mlflow_fastapi
+
 LOCALHOST = "127.0.0.1"
 _CONDA_ENV_FILE_NAME = "conda.yaml"
 _REQUIREMENTS_FILE_NAME = "requirements.txt"
@@ -227,15 +229,20 @@ def pyfunc_serve_and_score_model(
     env.update(MLFLOW_TRACKING_URI=mlflow.get_tracking_uri())
     env.update(MLFLOW_HOME=_get_mlflow_home())
     port = get_safe_port()
-    scoring_cmd = [
-        "mlflow",
-        "models",
-        "serve",
+
+    prepare_cmd = [
+        "mlflow_fastapi",
+        "prepare-model",
         "-m",
-        model_uri,
+        model_uri
+    ]
+    _start_scoring_proc(cmd=prepare_cmd, env=env, stdout=stdout, stderr=stdout)
+
+    scoring_cmd = [
+        "mlflow_fastapi",
+        "serve-model",
         "-p",
         str(port),
-        "--install-mlflow",
     ]
     if extra_args is not None:
         scoring_cmd += extra_args
