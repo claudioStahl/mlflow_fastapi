@@ -1,5 +1,7 @@
 import os
 import random
+import math
+import numpy as np
 from unittest import mock
 
 import requests
@@ -20,6 +22,7 @@ import mlflow
 import mlflow.pyfunc.scoring_server as pyfunc_scoring_server
 import mlflow.pyfunc
 # from mlflow.tracking.artifact_utils import _download_artifact_from_uri
+from mlflow.types import Schema, ColSpec, DataType
 from mlflow.utils.file_utils import read_yaml, write_yaml
 
 # import mlflow_fastapi
@@ -28,6 +31,12 @@ LOCALHOST = "127.0.0.1"
 _CONDA_ENV_FILE_NAME = "conda.yaml"
 _REQUIREMENTS_FILE_NAME = "requirements.txt"
 _CONSTRAINTS_FILE_NAME = "constraints.txt"
+
+
+def shuffle_pdf(pdf):
+    cols = list(pdf.columns)
+    random.shuffle(cols)
+    return pdf[cols]
 
 
 def _strip_dev_version_suffix(version):
@@ -86,12 +95,13 @@ def _download_artifact_from_uri(artifact_uri, output_path=None):
         artifact_path = ""
     else:
         artifact_path = posixpath.basename(parsed_uri.path)
-        parsed_uri = parsed_uri._replace(path=posixpath.dirname(parsed_uri.path))
+        parsed_uri = parsed_uri._replace(
+            path=posixpath.dirname(parsed_uri.path))
         root_uri = prefix + urllib.parse.urlunparse(parsed_uri)
 
     return get_artifact_repository(artifact_uri=root_uri).download_artifacts(
         artifact_path=artifact_path, dst_path=output_path
-    )    
+    )
 
 
 def _get_pip_deps(conda_env):
@@ -146,7 +156,8 @@ def score_model_in_sagemaker_docker_container(
     env = dict(os.environ)
     env.update(LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
     proc = _start_scoring_proc(
-        cmd=["mlflow", "sagemaker", "run-local", "-m", model_uri, "-p", "5000", "-f", flavor],
+        cmd=["mlflow", "sagemaker", "run-local", "-m",
+             model_uri, "-p", "5000", "-f", flavor],
         env=env,
     )
     return _evaluate_scoring_proc(proc, 5000, data, content_type, activity_polling_timeout_seconds)
@@ -208,6 +219,7 @@ def exec_prepare_model(model_uri, stdout=sys.stdout):
     env.update(LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
     env.update(MLFLOW_TRACKING_URI=mlflow.get_tracking_uri())
     env.update(MLFLOW_HOME=_get_mlflow_home())
+    env.update(MLFLOW_FASTAPI_HOME=os.getcwd())
 
     prepare_cmd = [
         "mlflow_fastapi",
@@ -243,6 +255,7 @@ def pyfunc_serve_and_score_model(
     env.update(LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
     env.update(MLFLOW_TRACKING_URI=mlflow.get_tracking_uri())
     env.update(MLFLOW_HOME=_get_mlflow_home())
+    env.update(MLFLOW_FASTAPI_HOME=os.getcwd())
     port = get_safe_port()
 
     scoring_cmd = [
@@ -253,7 +266,8 @@ def pyfunc_serve_and_score_model(
     ]
     if extra_args is not None:
         scoring_cmd += extra_args
-    proc = _start_scoring_proc(cmd=scoring_cmd, env=env, stdout=stdout, stderr=stdout)
+    proc = _start_scoring_proc(
+        cmd=scoring_cmd, env=env, stdout=stdout, stderr=stdout)
     return _evaluate_scoring_proc(proc, port, data, content_type, activity_polling_timeout_seconds)
 
 
@@ -303,8 +317,10 @@ class RestEndpoint:
             time.sleep(5)
             # noinspection PyBroadException
             try:
-                ping_status = requests.get(url="http://localhost:%d/ping" % self._port)
-                print("connection attempt", i, "server is up! ping status", ping_status)
+                ping_status = requests.get(
+                    url="http://localhost:%d/ping" % self._port)
+                print("connection attempt", i,
+                      "server is up! ping status", ping_status)
                 if ping_status.status_code == 200:
                     break
             except Exception:
@@ -356,6 +372,28 @@ def _evaluate_scoring_proc(proc, port, data, content_type, activity_polling_time
     """
     with RestEndpoint(proc, port, activity_polling_timeout_seconds) as endpoint:
         return endpoint.invoke(data, content_type)
+
+
+@pytest.fixture
+def pandas_df_with_all_types():
+    pdf = pd.DataFrame(
+        {
+            "boolean": [True, False, True],
+            "integer": np.array([1, 2, 3], np.int32),
+            "long": np.array([1, 2, 3], np.int64),
+            "float": np.array([math.pi, 2 * math.pi, 3 * math.pi], np.float32),
+            "double": [math.pi, 2 * math.pi, 3 * math.pi],
+            "binary": [bytearray([1, 2, 3]), bytearray([4, 5, 6]), bytearray([7, 8, 9])],
+            "datetime": [
+                np.datetime64("2021-01-01 00:00:00"),
+                np.datetime64("2021-02-02 00:00:00"),
+                np.datetime64("2021-03-03 12:00:00"),
+            ],
+        }
+    )
+    pdf["string"] = pd.Series(
+        ["a", "b", "c"], dtype=DataType.string.to_pandas())
+    return pdf
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -439,7 +477,8 @@ def _assert_pip_requirements(model_uri, requirements, constraints=None, strict=F
     """
     local_path = _download_artifact_from_uri(model_uri)
     txt_reqs = _read_lines(os.path.join(local_path, _REQUIREMENTS_FILE_NAME))
-    conda_reqs = _get_pip_deps(_read_yaml(os.path.join(local_path, _CONDA_ENV_FILE_NAME)))
+    conda_reqs = _get_pip_deps(_read_yaml(
+        os.path.join(local_path, _CONDA_ENV_FILE_NAME)))
     compare_func = set.__eq__ if strict else set.__le__
     requirements = set(requirements)
     assert compare_func(requirements, set(txt_reqs))
@@ -471,7 +510,8 @@ def _is_available_on_pypi(package, version=None, module=None):
     return (
         dist_files is not None  # specified version exists
         and (len(dist_files) > 0)  # at least one distribution file exists
-        and not dist_files[0].get("yanked", False)  # specified version is not yanked
+        # specified version is not yanked
+        and not dist_files[0].get("yanked", False)
     )
 
 

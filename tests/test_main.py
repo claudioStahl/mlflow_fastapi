@@ -23,34 +23,12 @@ from mlflow.types import Schema, ColSpec, DataType
 from mlflow.utils.file_utils import TempDir
 from mlflow.utils.proto_json_utils import NumpyEncoder
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from mlflow_fastapi.main import app
-
-from tests.helper_functions import pyfunc_serve_and_score_model, random_int, random_str, exec_prepare_model
+from tests.helper_functions import pyfunc_serve_and_score_model, random_int, random_str, exec_prepare_model, shuffle_pdf
 
 ModelWithData = namedtuple("ModelWithData", ["model", "inference_data"])
 
-@pytest.fixture
-def pandas_df_with_all_types():
-    pdf = pd.DataFrame(
-        {
-            "boolean": [True, False, True],
-            "integer": np.array([1, 2, 3], np.int32),
-            "long": np.array([1, 2, 3], np.int64),
-            "float": np.array([math.pi, 2 * math.pi, 3 * math.pi], np.float32),
-            "double": [math.pi, 2 * math.pi, 3 * math.pi],
-            "binary": [bytearray([1, 2, 3]), bytearray([4, 5, 6]), bytearray([7, 8, 9])],
-            "datetime": [
-                np.datetime64("2021-01-01 00:00:00"),
-                np.datetime64("2021-02-02 00:00:00"),
-                np.datetime64("2021-03-03 12:00:00"),
-            ],
-        }
-    )
-    pdf["string"] = pd.Series(
-        ["a", "b", "c"], dtype=DataType.string.to_pandas())
-    return pdf
+
+
 
 
 @pytest.fixture(scope="session")
@@ -346,3 +324,67 @@ def test_scoring_server_successfully_evaluates_correct_tf_serving_keras_inputs(
     response_json = response.json()
     assert len(response_json) == 150
     assert len(response_json[0]) == 1
+
+
+def test_serving_model_with_schema(pandas_df_with_all_types):
+    class TestModel(PythonModel):
+        def predict(self, context, model_input):
+            return [[k, str(v)] for k, v in model_input.dtypes.items()]
+
+    schema = Schema([ColSpec(c, c) for c in pandas_df_with_all_types.columns])
+    df = shuffle_pdf(pandas_df_with_all_types)
+
+    with mlflow.start_run() as run:
+        mlflow.pyfunc.log_model(
+            "model", python_model=TestModel(), signature=ModelSignature(schema)
+        )
+
+        model_uri = "runs:/{}/model".format(run.info.run_id)
+        exec_prepare_model(model_uri)
+
+        response = pyfunc_serve_and_score_model(
+            model_uri,
+            data=json.dumps(df.to_dict(orient="split"), cls=NumpyEncoder),
+            content_type=pyfunc_scoring_server.CONTENT_TYPE_JSON_SPLIT_ORIENTED
+        )
+
+        response_json = json.loads(response.content)
+        assert response_json == [
+            [k, str(v)] for k, v in pandas_df_with_all_types.dtypes.items()]
+
+        response = pyfunc_serve_and_score_model(
+            model_uri,
+            data=json.dumps(pandas_df_with_all_types.to_dict(
+                orient="records"), cls=NumpyEncoder),
+            content_type=pyfunc_scoring_server.CONTENT_TYPE_JSON_RECORDS_ORIENTED
+        )
+
+        response_json = json.loads(response.content)
+        assert response_json == [
+            [k, str(v)] for k, v in pandas_df_with_all_types.dtypes.items()]
+
+
+def test_parse_json_input_including_path():
+    class TestModel(PythonModel):
+        def predict(self, context, model_input):
+            return 1
+
+    with mlflow.start_run() as run:
+        mlflow.pyfunc.log_model("model", python_model=TestModel())
+
+        pandas_split_content = pd.DataFrame(
+            {
+                "url": ["http://foo.com", "https://bar.com"],
+                "bad_protocol": ["aaa://bbb", "address:/path"],
+            }
+        ).to_json(orient="split")
+
+        model_uri = "runs:/{}/model".format(run.info.run_id)
+        exec_prepare_model(model_uri)
+
+        response_records_content_type = pyfunc_serve_and_score_model(
+            model_uri,
+            data=pandas_split_content,
+            content_type=pyfunc_scoring_server.CONTENT_TYPE_JSON,
+        )
+        assert response_records_content_type.status_code == 200

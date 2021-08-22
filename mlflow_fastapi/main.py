@@ -85,10 +85,15 @@ model_path = os.getcwd() + "/model"
 model_uri = path_to_local_file_uri(model_path)
 print(model_uri)
 
-model = load_model(model_uri)
-input_schema = model.metadata.get_input_schema()
+# model = None
+# input_schema = None
 
 app = FastAPI()
+
+# @app.on_event("startup")
+# async def startup_event():
+model = load_model(model_uri)
+input_schema = model.metadata.get_input_schema()
 
 
 @app.get("/ping")

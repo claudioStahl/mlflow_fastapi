@@ -1,2 +1,4 @@
 __pycache__
-mlflow_fastapi.egg-info
+/mlflow_fastapi.egg-info
+/mlruns
+/model
