@@ -203,6 +203,21 @@ def pyfunc_serve_from_docker_image_with_env_override(
     return _start_scoring_proc(cmd=scoring_cmd, env=env)
 
 
+def exec_prepare_model(model_uri, stdout=sys.stdout):
+    env = dict(os.environ)
+    env.update(LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8")
+    env.update(MLFLOW_TRACKING_URI=mlflow.get_tracking_uri())
+    env.update(MLFLOW_HOME=_get_mlflow_home())
+
+    prepare_cmd = [
+        "mlflow_fastapi",
+        "prepare-model",
+        "-m",
+        model_uri
+    ]
+    _start_scoring_proc(cmd=prepare_cmd, env=env, stdout=stdout, stderr=stdout)
+
+
 def pyfunc_serve_and_score_model(
     model_uri,
     data,
@@ -229,14 +244,6 @@ def pyfunc_serve_and_score_model(
     env.update(MLFLOW_TRACKING_URI=mlflow.get_tracking_uri())
     env.update(MLFLOW_HOME=_get_mlflow_home())
     port = get_safe_port()
-
-    prepare_cmd = [
-        "mlflow_fastapi",
-        "prepare-model",
-        "-m",
-        model_uri
-    ]
-    _start_scoring_proc(cmd=prepare_cmd, env=env, stdout=stdout, stderr=stdout)
 
     scoring_cmd = [
         "mlflow_fastapi",

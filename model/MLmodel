@@ -1,11 +1,12 @@
 flavors:
+  keras:
+    data: data
+    keras_module: keras
+    keras_version: 2.4.3
+    save_format: tf
   python_function:
+    data: data
     env: conda.yaml
-    loader_module: mlflow.sklearn
-    model_path: model.pkl
+    loader_module: mlflow.keras
     python_version: 3.6.13
-  sklearn:
-    pickled_model: model.pkl
-    serialization_format: cloudpickle
-    sklearn_version: 0.23.2
-utc_time_created: '2021-08-22 01:50:28.008353'
+utc_time_created: '2021-08-22 03:56:49.480690'

@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import FastAPI, Response, Request, status
+from fastapi import FastAPI, Response, Request, HTTPException, status
 
 
 from mlflow.models import FlavorBackend
@@ -69,7 +69,6 @@ PREDICTIONS_WRAPPER_ATTR_NAME_ENV_KEY = "PREDICTIONS_WRAPPER_ATTR_NAME"
 _logger = logging.getLogger(__name__)
 
 
-
 def infer_and_parse_json_input(json_input, schema: Schema = None):
     """
     :param json_input: A JSON-formatted string representation of TF serving input or a Pandas
@@ -79,13 +78,10 @@ def infer_and_parse_json_input(json_input, schema: Schema = None):
     try:
         decoded_input = json.loads(json_input)
     except json.decoder.JSONDecodeError:
-        _handle_serving_error(
-            error_message=(
-                "Failed to parse input from JSON. Ensure that input is a valid JSON"
-                " formatted string."
-            ),
-            error_code=MALFORMED_REQUEST,
-        )
+        raise HTTPException(status_code=400, detail=(
+            "Failed to parse input from JSON. Ensure that input is a valid JSON"
+            " formatted string."
+        ))
 
     if isinstance(decoded_input, list):
         return parse_json_input(json_input=json_input, orient="records", schema=schema)
@@ -94,19 +90,14 @@ def infer_and_parse_json_input(json_input, schema: Schema = None):
             try:
                 return parse_tf_serving_input(decoded_input, schema=schema)
             except MlflowException as ex:
-                _handle_serving_error(
-                    error_message=(ex.message), error_code=MALFORMED_REQUEST,
-                )
+                raise HTTPException(status_code=400, detail=(ex.message))
         else:
             return parse_json_input(json_input=json_input, orient="split", schema=schema)
     else:
-        _handle_serving_error(
-            error_message=(
-                "Failed to parse input from JSON. Ensure that input is a valid JSON"
-                " list or dictionary."
-            ),
-            error_code=MALFORMED_REQUEST,
-        )
+        raise HTTPException(status_code=400, detail=(
+            "Failed to parse input from JSON. Ensure that input is a valid JSON"
+            " list or dictionary."
+        ))
 
 
 def parse_json_input(json_input, orient="split", schema: Schema = None):
@@ -121,15 +112,12 @@ def parse_json_input(json_input, orient="split", schema: Schema = None):
     try:
         return _dataframe_from_json(json_input, pandas_orient=orient, schema=schema)
     except Exception:
-        _handle_serving_error(
-            error_message=(
-                "Failed to parse input as a Pandas DataFrame. Ensure that the input is"
-                " a valid JSON-formatted Pandas DataFrame with the `{orient}` orient"
-                " produced using the `pandas.DataFrame.to_json(..., orient='{orient}')`"
-                " method.".format(orient=orient)
-            ),
-            error_code=MALFORMED_REQUEST,
-        )
+        raise HTTPException(status_code=400, detail=(
+            "Failed to parse input as a Pandas DataFrame. Ensure that the input is"
+            " a valid JSON-formatted Pandas DataFrame with the `{orient}` orient"
+            " produced using the `pandas.DataFrame.to_json(..., orient='{orient}')`"
+            " method.".format(orient=orient)
+        ))
 
 
 def parse_csv_input(csv_input):
@@ -141,14 +129,11 @@ def parse_csv_input(csv_input):
     try:
         return pd.read_csv(csv_input)
     except Exception:
-        _handle_serving_error(
-            error_message=(
-                "Failed to parse input as a Pandas DataFrame. Ensure that the input is"
-                " a valid CSV-formatted Pandas DataFrame produced using the"
-                " `pandas.DataFrame.to_csv()` method."
-            ),
-            error_code=MALFORMED_REQUEST,
-        )
+        raise HTTPException(status_code=400, detail=(
+            "Failed to parse input as a Pandas DataFrame. Ensure that the input is"
+            " a valid CSV-formatted Pandas DataFrame produced using the"
+            " `pandas.DataFrame.to_csv()` method."
+        ))
 
 
 def parse_split_oriented_json_input_to_numpy(json_input):
@@ -165,15 +150,20 @@ def parse_split_oriented_json_input_to_numpy(json_input):
             columns=json_input_list["columns"],
         ).infer_objects()
     except Exception:
-        _handle_serving_error(
-            error_message=(
-                "Failed to parse input as a Numpy. Ensure that the input is"
-                " a valid JSON-formatted Pandas DataFrame with the split orient"
-                " produced using the `pandas.DataFrame.to_json(..., orient='split')`"
-                " method."
-            ),
-            error_code=MALFORMED_REQUEST,
-        )
+        raise HTTPException(status_code=400, detail=(
+            "Failed to parse input as a Numpy. Ensure that the input is"
+            " a valid JSON-formatted Pandas DataFrame with the split orient"
+            " produced using the `pandas.DataFrame.to_json(..., orient='split')`"
+            " method."
+        ))
+
+
+def predict(model, data):
+    try:
+        return model.predict(data)
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=('{}'.format(err)))
+
 
 model_path = os.getcwd() + "/model"
 
@@ -194,19 +184,15 @@ def ping(response: Response):
     response.status_code = 200 if health else 404
     return "pong"
 
+
 @app.post("/invocations")
 async def invocations(request: Request):
     content_type = request.headers['content-type']
     body = await request.body()
-    print(content_type)
-    print(body)
 
     if content_type == CONTENT_TYPE_CSV:
-        # data = flask.request.data.decode("utf-8")
-        # csv_input = StringIO(body)
         data = parse_csv_input(csv_input=body)
     elif content_type == CONTENT_TYPE_JSON:
-        # json_str = flask.request.data.decode("utf-8")
         data = infer_and_parse_json_input(body, input_schema)
     elif content_type == CONTENT_TYPE_JSON_SPLIT_ORIENTED:
         data = parse_json_input(
@@ -223,9 +209,15 @@ async def invocations(request: Request):
     elif content_type == CONTENT_TYPE_JSON_SPLIT_NUMPY:
         data = parse_split_oriented_json_input_to_numpy(body)
     else:
-        return {}
+        raise HTTPException(status_code=415, detail=(
+            "This predictor only supports the following content types,"
+            " {supported_content_types}. Got '{received_content_type}'.".format(
+                supported_content_types=CONTENT_TYPES,
+                received_content_type=content_type,
+            )
+        ))
 
-    raw_predictions = model.predict(data)
+    raw_predictions = predict(model, data)
     predictions = _get_jsonable_obj(raw_predictions, pandas_orient="records")
 
     return predictions
