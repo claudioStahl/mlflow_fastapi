@@ -21,11 +21,9 @@ import pytest
 import mlflow
 import mlflow.pyfunc.scoring_server as pyfunc_scoring_server
 import mlflow.pyfunc
-# from mlflow.tracking.artifact_utils import _download_artifact_from_uri
-from mlflow.types import Schema, ColSpec, DataType
+from mlflow.types import DataType
 from mlflow.utils.file_utils import read_yaml, write_yaml
 
-# import mlflow_fastapi
 
 LOCALHOST = "127.0.0.1"
 _CONDA_ENV_FILE_NAME = "conda.yaml"

@@ -1,34 +1,26 @@
 import json
-import math
 import numpy as np
 import os
 import pandas as pd
-from collections import namedtuple, OrderedDict
+from collections import namedtuple
 
 from keras.models import Model
 from keras.layers import Dense, Input, Concatenate
 from keras.optimizers import SGD
 import pytest
-import random
 import sklearn.datasets as datasets
 import sklearn.neighbors as knn
 
-from mlflow.exceptions import MlflowException
 import mlflow.pyfunc.scoring_server as pyfunc_scoring_server
 import mlflow.sklearn
-from mlflow.models import ModelSignature, infer_signature
-from mlflow.protos.databricks_pb2 import ErrorCode, MALFORMED_REQUEST, BAD_REQUEST
+from mlflow.models import ModelSignature
 from mlflow.pyfunc import PythonModel
-from mlflow.types import Schema, ColSpec, DataType
-from mlflow.utils.file_utils import TempDir
+from mlflow.types import Schema, ColSpec
 from mlflow.utils.proto_json_utils import NumpyEncoder
 
-from tests.helper_functions import pyfunc_serve_and_score_model, random_int, random_str, exec_prepare_model, shuffle_pdf
+from tests.helper_functions import pyfunc_serve_and_score_model, exec_prepare_model, shuffle_pdf, pandas_df_with_all_types
 
 ModelWithData = namedtuple("ModelWithData", ["model", "inference_data"])
-
-
-
 
 
 @pytest.fixture(scope="session")
