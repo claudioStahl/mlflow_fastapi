@@ -13,10 +13,10 @@ try:
 except ImportError:
     from mlflow.pyfunc import load_pyfunc as load_model
 
-from fastapi import FastAPI, Response, Request, HTTPException
+from fastapi import FastAPI, WebSocket, Response, Request, HTTPException
 from fastapi.responses import ORJSONResponse
 
-from mlflow.utils.file_utils import path_to_local_file_uri    
+from mlflow.utils.file_utils import path_to_local_file_uri
 
 from mlflow_fastapi.parsers import infer_and_parse_json_input, parse_json_input, parse_csv_input, parse_split_oriented_json_input_to_numpy
 
@@ -46,27 +46,7 @@ def predict(model, data):
         raise HTTPException(status_code=422, detail=('{}'.format(err)))
 
 
-app = FastAPI()        
-
-model_path = os.getcwd() + "/model"
-model_uri = path_to_local_file_uri(model_path)
-
-model = load_model(model_uri)
-input_schema = model.metadata.get_input_schema()
-
-
-@app.get("/ping", response_class=ORJSONResponse)
-def ping(response: Response):
-    health = model is not None
-    response.status_code = 200 if health else 404
-    return "pong"
-
-
-@app.post("/invocations", response_class=ORJSONResponse)
-async def invocations(request: Request):
-    content_type = request.headers['content-type']
-    body = await request.body()
-
+def parse_and_predict(content_type, body):
     if content_type == CONTENT_TYPE_CSV:
         data = parse_csv_input(csv_input=body)
     elif content_type == CONTENT_TYPE_JSON:
@@ -98,3 +78,35 @@ async def invocations(request: Request):
     predictions = _get_jsonable_obj(raw_predictions, pandas_orient="records")
 
     return predictions
+
+
+app = FastAPI()
+
+model_path = os.getcwd() + "/model"
+model_uri = path_to_local_file_uri(model_path)
+
+model = load_model(model_uri)
+input_schema = model.metadata.get_input_schema()
+
+
+@app.get("/ping", response_class=ORJSONResponse)
+def ping(response: Response):
+    health = model is not None
+    response.status_code = 200 if health else 404
+    return "pong"
+
+
+@app.post("/invocations", response_class=ORJSONResponse)
+async def invocations(request: Request):
+    content_type = request.headers['content-type']
+    body = await request.body()
+    return parse_and_predict(content_type, body)
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        received = await websocket.receive_json()
+        result = parse_and_predict(received['type'], received['content'])
+        await websocket.send_json(result)

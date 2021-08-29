@@ -261,6 +261,8 @@ def pyfunc_serve_and_score_model(
         "serve-model",
         "-p",
         str(port),
+        "-w",
+        "1"
     ]
     if extra_args is not None:
         scoring_cmd += extra_args
