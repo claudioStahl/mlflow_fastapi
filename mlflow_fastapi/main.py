@@ -14,6 +14,7 @@ except ImportError:
     from mlflow.pyfunc import load_pyfunc as load_model
 
 from fastapi import FastAPI, Response, Request, HTTPException
+from fastapi.responses import ORJSONResponse
 
 from mlflow.utils.file_utils import path_to_local_file_uri    
 
@@ -54,14 +55,14 @@ model = load_model(model_uri)
 input_schema = model.metadata.get_input_schema()
 
 
-@app.get("/ping")
+@app.get("/ping", response_class=ORJSONResponse)
 def ping(response: Response):
     health = model is not None
     response.status_code = 200 if health else 404
     return "pong"
 
 
-@app.post("/invocations")
+@app.post("/invocations", response_class=ORJSONResponse)
 async def invocations(request: Request):
     content_type = request.headers['content-type']
     body = await request.body()
