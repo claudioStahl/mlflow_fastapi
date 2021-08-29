@@ -4,9 +4,11 @@ import os
 
 from mlflow_fastapi.prepare_model import do_prepare_model
 
+
 @click.group()
 def cli():
     pass
+
 
 @cli.command()
 @click.option(
@@ -25,7 +27,18 @@ def cli():
     default=4,
     help="Number of gunicorn worker processes to handle requests (default: 4).",
 )
-def serve_model(host, port, workers):
+@click.option(
+    "--model-uri",
+    "-m",
+    default=None,
+    metavar="URI",
+    help="URI to the model. A local path, a 'runs:/' URI, or a"
+    " remote storage URI (e.g., an 's3://' URI). For more information"
+    " about supported remote URIs for model artifacts, see"
+    " https://mlflow.org/docs/latest/tracking.html"
+    "#artifact-stores",
+)
+def serve_model(host, port, workers, model_uri):
     """
     Serve a model saved with MLflow by launching a webserver on the specified host and port.
     The command supports models with the ``python_function`` or ``crate`` (R Function) flavor.
@@ -46,6 +59,10 @@ def serve_model(host, port, workers):
         }'
     """
 
+    if model_uri:
+        do_prepare_model(model_uri)
+        click.echo("Model prepared")
+
     command = (
         "uvicorn --host={host} --port={port} --workers={workers}"
         " mlflow_fastapi.main:app"
@@ -54,9 +71,10 @@ def serve_model(host, port, workers):
     command_env = os.environ.copy()
 
     if os.name != "nt":
-      subprocess.Popen(["bash", "-c", command], env=command_env).wait()
+        subprocess.Popen(["bash", "-c", command], env=command_env).wait()
     else:
-      subprocess.Popen(command, env=command_env).wait()
+        subprocess.Popen(command, env=command_env).wait()
+
 
 @cli.command()
 @click.option(
@@ -72,8 +90,9 @@ def serve_model(host, port, workers):
     "#artifact-stores",
 )
 def prepare_model(model_uri):
-  do_prepare_model(model_uri)
-  click.echo("Success")
+    do_prepare_model(model_uri)
+    click.echo("Success")
+
 
 if __name__ == '__main__':
     cli()
